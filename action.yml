@@ -1,0 +1,105 @@
+name: 'Setup SikkerKey'
+description: 'Install the SikkerKey CLI and inject secrets into your workflow'
+author: 'SikkerKey'
+
+branding:
+  icon: 'shield'
+  color: 'green'
+
+inputs:
+  version:
+    description: 'CLI version to install (default: latest)'
+    required: false
+    default: 'latest'
+  vault-id:
+    description: 'Vault ID to connect to'
+    required: true
+  project-id:
+    description: 'Project ID to unlock'
+    required: true
+  machine-id:
+    description: 'Machine ID for authentication'
+    required: true
+  private-key:
+    description: 'Ed25519 private key (PEM format, from GitHub secret)'
+    required: true
+  api-url:
+    description: 'SikkerKey API URL'
+    required: false
+    default: 'https://api.sikkerkey.com'
+  export:
+    description: 'Export secrets as environment variables (true/false)'
+    required: false
+    default: 'false'
+  export-prefix:
+    description: 'Prefix for exported environment variable names'
+    required: false
+    default: ''
+
+outputs:
+  secrets-count:
+    description: 'Number of secrets exported'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install SikkerKey CLI
+      shell: bash
+      run: |
+        npm install -g @sikkerkey/cli@${{ inputs.version }} 2>/dev/null || {
+          echo "::error::Failed to install SikkerKey CLI"
+          exit 1
+        }
+        echo "SikkerKey CLI installed: $(sikkerkey version)"
+
+    - name: Configure identity
+      shell: bash
+      run: |
+        VAULT_DIR="$HOME/.sikkerkey/vaults/${{ inputs.vault-id }}"
+        mkdir -p "$VAULT_DIR"
+        chmod 700 "$HOME/.sikkerkey" "$HOME/.sikkerkey/vaults" "$VAULT_DIR"
+
+        # Write private key
+        echo "${{ inputs.private-key }}" > "$VAULT_DIR/private.pem"
+        chmod 600 "$VAULT_DIR/private.pem"
+
+        # Write identity file
+        PRIVKEY_PATH="$VAULT_DIR/private.pem"
+        cat > "$VAULT_DIR/identity.json" <<EOF
+        {
+          "machineId": "${{ inputs.machine-id }}",
+          "machineName": "github-actions",
+          "vaultId": "${{ inputs.vault-id }}",
+          "apiUrl": "${{ inputs.api-url }}",
+          "privateKeyPath": "$PRIVKEY_PATH"
+        }
+        EOF
+        chmod 600 "$VAULT_DIR/identity.json"
+
+    - name: Connect and unlock
+      shell: bash
+      run: |
+        sikkerkey connect ${{ inputs.vault-id }}
+        sikkerkey unlock ${{ inputs.project-id }}
+
+    - name: Verify access
+      shell: bash
+      run: |
+        sikkerkey status
+
+    - name: Export secrets
+      if: inputs.export == 'true'
+      shell: bash
+      run: |
+        PREFIX="${{ inputs.export-prefix }}"
+        COUNT=0
+        while IFS='=' read -r key value; do
+          if [ -n "$key" ]; then
+            FULL_KEY="${PREFIX}${key}"
+            echo "${FULL_KEY}=${value}" >> "$GITHUB_ENV"
+            echo "::add-mask::${value}"
+            COUNT=$((COUNT + 1))
+          fi
+        done < <(sikkerkey export --project ${{ inputs.project-id }})
+        echo "secrets-count=${COUNT}" >> "$GITHUB_OUTPUT"
+        echo "Exported ${COUNT} secrets as environment variables"
