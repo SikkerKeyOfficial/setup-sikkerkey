@@ -46,7 +46,7 @@ runs:
     - name: Install SikkerKey CLI
       shell: bash
       run: |
-        npm install -g @sikkerkey/cli@${{ inputs.version }} 2>/dev/null || {
+        npm install -g sikkerkey@${{ inputs.version }} 2>/dev/null || {
           echo "::error::Failed to install SikkerKey CLI"
           exit 1
         }
