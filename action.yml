@@ -60,7 +60,7 @@ runs:
         chmod 700 "$HOME/.sikkerkey" "$HOME/.sikkerkey/vaults" "$VAULT_DIR"
 
         # Write private key
-        echo "${{ inputs.private-key }}" > "$VAULT_DIR/private.pem"
+        printf '%s\n' "${{ inputs.private-key }}" > "$VAULT_DIR/private.pem"
         chmod 600 "$VAULT_DIR/private.pem"
 
         # Write identity file
