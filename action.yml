@@ -54,23 +54,28 @@ runs:
 
     - name: Configure identity
       shell: bash
+      env:
+        SK_VAULT_ID: ${{ inputs.vault-id }}
+        SK_MACHINE_ID: ${{ inputs.machine-id }}
+        SK_PRIVATE_KEY: ${{ inputs.private-key }}
+        SK_API_URL: ${{ inputs.api-url }}
       run: |
-        VAULT_DIR="$HOME/.sikkerkey/vaults/${{ inputs.vault-id }}"
+        VAULT_DIR="$HOME/.sikkerkey/vaults/$SK_VAULT_ID"
         mkdir -p "$VAULT_DIR"
         chmod 700 "$HOME/.sikkerkey" "$HOME/.sikkerkey/vaults" "$VAULT_DIR"
 
-        # Write private key
-        printf '%s\n' "${{ inputs.private-key }}" > "$VAULT_DIR/private.pem"
+        # Write private key (env var preserves newlines)
+        echo "$SK_PRIVATE_KEY" > "$VAULT_DIR/private.pem"
         chmod 600 "$VAULT_DIR/private.pem"
 
         # Write identity file
         PRIVKEY_PATH="$VAULT_DIR/private.pem"
         cat > "$VAULT_DIR/identity.json" <<EOF
         {
-          "machineId": "${{ inputs.machine-id }}",
+          "machineId": "$SK_MACHINE_ID",
           "machineName": "github-actions",
-          "vaultId": "${{ inputs.vault-id }}",
-          "apiUrl": "${{ inputs.api-url }}",
+          "vaultId": "$SK_VAULT_ID",
+          "apiUrl": "$SK_API_URL",
           "privateKeyPath": "$PRIVKEY_PATH"
         }
         EOF
